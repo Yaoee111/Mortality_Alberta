@@ -48,14 +48,14 @@ The results of the study suggest that the Negative Binomial model is a better fi
 
 The rest of the paper is organized as follows: The [@sec-data] describes the data, variables, and methods used in the study and the rationale for the selection of this dataset. The data is presented through graphs. The [@sec-model] describes how Poisson and Negative Binomial models were constructed and predictions were made. The [@sec-results] presents the results of the analysis in a table. The [@sec-discussion] provides an in-depth discussion of our findings and reflections on the research process. Finally, the [@sec-appendix] adds details of the models.
 
-We use the statistical programming language `R` [@citeR]. In the data analysis and visualization process, we also made use of the following `R` packages: `readr` [@citereadr], `dplyr` [@citedplyr], `knitr` [@citeknitr], `kableExtra` [@citekExtra], `ggplot2` [@citeggplot2], `stringr` [@citestringr], `janitor` [@citejanitor], `rstanarm` [@citerstanarm], `modelsummary` [@citemodelsummary], `broom` [@citebroom], `broom.mixed` [@citebroomMix], `parameters` [@citeparameters], `magrittr` [@citemagrittr], `tidyverse` [@citetidyverse], `patchwork` [@citepatchwork], `bayesplot` [@citebayesplot], and `loo` [@citeloo].
+We use the statistical programming language `R` [@citeR]. In the data analysis and visualization process, we also made use of the following `R` packages: `readr` [@citereadr], `knitr` [@citeknitr], `kableExtra` [@citekableExtra], `ggplot2` [@citeggplot2], `stringr` [@citestringr], `janitor` [@citejanitor], `rstanarm` [@citerstanarm], `modelsummary` [@citemodelsummary], `broom` [@citebroom], `broom.mixed` [@citebroomMix], `magrittr` [@citemagrittr], `parameters` [@citeparameters], `tidyverse` [@citetidyverse], `dplyr` [@citedplyr], `patchwork` [@citepatchwork], `bayesplot` [@citebayesplot], and `loo` [@citeloo].
 
 
 # Data {#sec-data}
 
 ## Overview of the dataset
 
-This dataset is from Open Data Alberta (@citeOpenDataAlberta) and documents the leading causes of death over several years. The broader context of this dataset is public health and epidemiology. This dataset contains several key variables, including 'Calendar Year', 'Cause', and 'Total Deaths'. And this dataset is recorded from 2001 to 2022.
+This dataset is from Open Data Alberta and documents the leading causes of death over several years. The broader context of this dataset is public health and epidemiology. This dataset contains several key variables, including 'Calendar Year', 'Cause', and 'Total Deaths'. And this dataset is recorded from 2001 to 2022.
 
 ## Variable Examination
 
@@ -132,7 +132,7 @@ Background details are included in [Appendix -@sec-model-details].
 
 ## Model set-up
 
-To make it simpler to create a linear model to analyze the death data, we selected the top 10 causes of death for the year 2022. To present this data more directly, we created tables and figures. @tbl-topcauses-3 shows the Top 10 causes of death in Alberta in 2022.
+To make it simpler to create a linear model to analyze the death data, we selected the top 10 causes of death for the year 2022. To present this data more directly, we created tables and figures. @tbl-topcauses shows the Top 10 causes of death in Alberta in 2022.
 
 ```{r}
 #| echo: false
@@ -160,7 +160,7 @@ alberta_cod <-
 #| echo: false
 #| warning: false
 #| message: false
-#| lable: "tbl-topcauses-3"
+#| label: "tbl-topcauses"
 #| tbl-cap: Top-ten causes of death in Alberta in 2022
 
 alberta_cod |>
@@ -176,13 +176,15 @@ alberta_cod |>
   )
 ```
 
-We then created line graphs of the top five causes of death in 2022, showing how they performed from 2001 to 2022 (@fig-topcauses-4).
+We then created line graphs of the top five causes of death in 2022, showing how they performed from 2001 to 2022 (@fig-topcauses).
+
 
 ```{r}
 #| echo: false
 #| warning: false
 #| message: false
-#| lable: "fig-topcauses-4"
+#| fig-height: 5
+#| label: "fig-topcauses"
 #| fig-cap: Annual number of deaths for the top-five causes in 2022, since 2001, for Alberta, Canada
 
 top_causes <- alberta_cod %>%
@@ -203,6 +205,7 @@ ggplot(alberta_cod_filtered, aes(x = calendar_year, y = total_deaths, group = ca
   theme(legend.position = "none", 
         strip.text.x = element_text(size = 12))
 ```
+
 
 For creating the Poisson and Negative Binomial models, We can introduce some math functions. The Poisson regression model is expressed mathematically as 
 $$
@@ -256,7 +259,7 @@ cause_of_death_alberta_neg_binomial <- stan_glm(
 #| echo: false
 #| warning: false
 #| message: false
-#| lable: tbl-result
+#| label: tbl-result
 #| tbl-cap: Modeling the most prevalent cause of deaths in Alberta, 2001-2022
 
 model_results <- modelsummary(
@@ -295,12 +298,14 @@ The coefficients in the Negative Binomial model are nearly identical to those in
 
 ## LOO
 
-The Negative Binomial model demonstrated a better fit over the Poisson model as indicated by the Leave-One-Out (LOO) Cross-Validation results. In this case, we find that the Negative Binomial model is a better fit than the Poisson because ELPD is larger.
+The Negative Binomial model demonstrated a better fit over the Poisson model as indicated by the Leave-One-Out (LOO) Cross-Validation results (@tbl-loo). In this case, we find that the Negative Binomial model is a better fit than the Poisson because ELPD is larger.
 
 ```{r}
 #| echo: false
 #| warning: false
 #| message: false
+#| label: tbl-loo
+#| tbl-cap: Leave-One-Out Cross-Validation
 
 poisson <- loo(cause_of_death_alberta_poisson, cores = 2)
 neg_binomial <- loo(cause_of_death_alberta_neg_binomial, cores = 2)
@@ -379,7 +384,7 @@ After looking at death trends in Alberta, here's how we can learn more and bette
 #| echo: false
 #| warning: false
 #| message: false
-#| lable: fig-ppcheckp
+#| label: fig-ppcheckp-1
 #| fig-cap: Posterior prediction checks for poisson model
 
 pp_check(cause_of_death_alberta_poisson) +
@@ -390,7 +395,7 @@ pp_check(cause_of_death_alberta_poisson) +
 #| echo: false
 #| warning: false
 #| message: false
-#| lable: fig-ppchecknb
+#| label: fig-ppchecknb-2
 #| fig-cap: Posterior prediction checks for negative binomial model
 
 pp_check(cause_of_death_alberta_neg_binomial) +

@@ -47,7 +47,7 @@ bibliography: references.bib
 
 #### Preprocessing/Cleaning/Labeling
 
--   **Preprocessing Done**: The data was subjected to cleaning and structuring to ensure accuracy and usability. Such preprocessing includes categorization based on the International Classification of Diseases (\@citetzitzivacos2007international).
+-   **Preprocessing Done**: The data was subjected to cleaning and structuring to ensure accuracy and usability. Such preprocessing includes categorization based on the International Classification of Diseases.
 
 -   **Raw Data Availability**: Raw data may be available through official requests but is not directly linked in the dataset.
 
