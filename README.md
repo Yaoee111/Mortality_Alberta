@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository is dedicated to the analysis of Mortality in Alberta from 2001 to 2022, using data obtained from Open Data Alberta (https://open.alberta.ca/opendata/leading-causes-of-death).
+This repository is dedicated to the analysis of Mortality in Alberta from 2001 to 2022, using data obtained from Open Data Alberta. You can find it here: https://open.alberta.ca/opendata/leading-causes-of-death.
 
 
 ## File Structure
