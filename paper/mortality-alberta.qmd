@@ -1,0 +1,405 @@
+---
+title: "Unveiling the Patterns of Mortality"
+subtitle: "A Comparative Analysis of Poisson and Negative Binomial Models in Predicting Causes of Death in Alberta"
+author: 
+  - Yiyi Yao
+  - Zixi Song
+  - Pu Yuan
+thanks: "Code and data are available at: https://github.com/Yaoee111/mortality_alberta.git. SSRP replication available at: https://doi.org/10.17605/OSF.IO/QDWBR."
+date: "11 March 2024"
+date-format: long
+abstract: "This study examined mortality data from Alberta, between 2001 and 2022, using general linear models to find the pattern of top causes of deaths over years. The study indicated that, compared to the Poisson model, the Negative Binomial model better represents the variability in death rates, particularly in the face of overdispersion. The application of more relevant models helps to simulate mortality data in the present as well as predict future data. These findings are useful for improving public health and interventions, as well as addressing healthcare resource allocation problems and developing dynamic policies in response to Alberta's changing mortality environment."
+format: pdf
+number-sections: true
+bibliography: references.bib
+---
+
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(kableExtra)
+library(janitor)
+library(stringr)
+library(rstanarm)
+library(modelsummary)
+library(broom)
+library(parameters)
+library(broom.mixed)
+library(magrittr)
+library(tidyverse)
+library(patchwork)
+library(bayesplot)
+library(loo)
+```
+
+
+# Introduction
+
+In the fields of public health and epidemiology, understanding mortality patterns is essential for effective healthcare planning, policy-making, and resource allocation. Alberta, Canada, with its diverse population and healthcare needs, provides a unique opportunity to study these patterns. Comprehensive analyses of mortality data can provide insight into the major causes of death, trends over time, and the impact of public health interventions. However, traditional modeling often fails to account for the complexity and variability inherent in mortality data, such as the overdispersion of deaths among different causes. This shortcoming highlights the need for a more accurate approach to modeling mortality data to inform healthcare strategies and interventions.
+
+To address this need, this study utilizes mortality data for Alberta for the years 2001-2022 and performs a comparative analysis of Poisson and Negative Binomial models. The goals of the study were to identify and visualize the leading causes of death in the region, determine trends over time, and assess the impact of various diseases and conditions on mortality. Using both statistical models, the study seeks to determine which model better describes the variability and distribution of mortality data, particularly in the context of overdispersion.
+
+The results of the study suggest that the Negative Binomial model is a better fit for Alberta mortality data and is effective in reflecting observed changes in the number of deaths. In addition, it highlights the most common causes of death in the province, providing a comprehensive understanding of public health issues in Alberta. These findings will be critical in guiding future public health initiatives, interventions, and decision-making aimed at reducing mortality and meeting the health needs of Alberta residents.
+
+The rest of the paper is organized as follows: The [@sec-data] describes the data, variables, and methods used in the study and the rationale for the selection of this dataset. The data is presented through graphs. The [@sec-model] describes how Poisson and Negative Binomial models were constructed and predictions were made. The [@sec-results] presents the results of the analysis in a table. The [@sec-discussion] provides an in-depth discussion of our findings and reflections on the research process. Finally, the [@sec-appendix] adds details of the models.
+
+We use the statistical programming language `R` [@citeR]. In the data analysis and visualization process, we also made use of the following `R` packages: `readr` [@citereadr], `dplyr` [@citedplyr], `knitr` [@citeknitr], `kableExtra` [@citekExtra], `ggplot2` [@citeggplot2], `stringr` [@citestringr], `janitor` [@citejanitor], `rstanarm` [@citerstanarm], `modelsummary` [@citemodelsummary], `broom` [@citebroom], `broom.mixed` [@citebroomMix], `parameters` [@citeparameters], `magrittr` [@citemagrittr], `tidyverse` [@citetidyverse], `patchwork` [@citepatchwork], `bayesplot` [@citebayesplot], and `loo` [@citeloo].
+
+
+# Data {#sec-data}
+
+## Overview of the dataset
+
+This dataset is from Open Data Alberta (@citeOpenDataAlberta) and documents the leading causes of death over several years. The broader context of this dataset is public health and epidemiology. This dataset contains several key variables, including 'Calendar Year', 'Cause', and 'Total Deaths'. And this dataset is recorded from 2001 to 2022.
+
+## Variable Examination
+
+Calendar Year: This numeric variable records the year in which the death occurred (from 2001 to 2022). It is essential for trend analysis over time.
+Cause: This is a categorical variable that records the medical cause of death. It provides insight into the general health issues that lead to death.
+Total Deaths: This is a numeric variable indicating the number of deaths attributed to each cause in a given year. This indicator is essential for assessing the impact of each health problem.
+
+## Rationale for Selection
+
+While other datasets on mortality exist, the Open Data Alberta was chosen because of its comprehensive coverage of the province. It provides a detailed breakdown of causes of death and the dataset is official and reliable. Other datasets were considered, but they lacked a specific regional focus or did not provide the same level of detail over an equivalent period.
+
+## Data cleaning and preparation
+
+Cleaning focused on simplifying the dataset to allow for a more streamlined examination. The main cleaning step consisted of removing rows that were not relevant to our analysis. This process did not construct new variables but rather refined the dataset to the most relevant parts.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| label: "fig-data1"
+#| fig-cap: Time Series Plot of Total Deaths Over Time 
+
+# Read the dataset
+data <- read_csv("/cloud/project/data/analysis_data/deaths-causes.csv", show_col_types = FALSE)
+
+data_aggregated <- data %>%
+  group_by(calendar_year) %>%
+  summarise(total_deaths = sum(total_deaths, na.rm = TRUE))
+
+ggplot(data_aggregated, aes(x = calendar_year, y = total_deaths)) +
+  geom_line(group=1) +  
+  geom_point() +  
+  labs(x = "Calendar Year", y = "Total Deaths") +
+  theme_minimal()
+
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| label: fig-data2
+#| fig-cap: Bar Plot of Deaths by Top 20 Causes
+
+# Read the dataset
+data <- read_csv("/cloud/project/data/analysis_data/deaths-causes.csv")
+
+data_top_causes <- data %>%
+  group_by(cause) %>%
+  summarize(Total_Deaths = sum(total_deaths, na.rm = TRUE)) %>%
+  arrange(desc(Total_Deaths)) %>%
+  top_n(20, Total_Deaths) # Select top 20 causes of death
+
+ggplot(data_top_causes, aes(x=reorder(cause, Total_Deaths), y=Total_Deaths)) +
+  geom_bar(stat="identity") +
+  coord_flip() +  # Flip coordinates for horizontal bars
+  labs(x="Cause of Death", y="Total Deaths") +
+  theme_minimal()
+```
+
+## Analysis and Insights
+
+Graphs, including time-series plot of Total Deaths (@fig-data1) and bar charts of Deaths by Causes (@fig-data2), illustrate mortality trends and leading causes of death in Alberta. Through the time series plot, we can conclude that Total Deaths shows a steady upward trend with the increase in years.Noteworthy, after 2019, a certain condition caused a spike in mortality, which we will know later that it is because of Covid-19. The bar chart shows the total number of deaths attribute to each cause. For the sake of presentation, we have listed only the top 20 here. Summary statistics tables provide a overview of the data, highlighting key figures such as leading causes of death and number of deaths.
+
+
+
+# Model {#sec-model}
+
+The goal of our modeling work is twofold: Firstly, find out which model, Poisson or Negative Binomial, better explains the number of deaths from different causes in Alberta. Our first aim is to pick a model that fits our data well, showing us how deaths change with different causes. The checks we did show that the Negative Binomial model works better because it can handle more variation in the data.
+
+Our second aim is to figure out what influences how many people die from these causes. By using the better model, we can see which factors are most important in affecting mortality rates. This helps public health officials know where to focus their efforts to prevent deaths, making our communities healthier.
+
+Background details are included in [Appendix -@sec-model-details].
+
+## Model set-up
+
+To make it simpler to create a linear model to analyze the death data, we selected the top 10 causes of death for the year 2022. To present this data more directly, we created tables and figures. @tbl-topcauses-3 shows the Top 10 causes of death in Alberta in 2022.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+alberta_cod <-
+  read_csv(
+    "https://open.alberta.ca/dataset/03339dc5-fb51-4552-97c7-853688fc428d/resource/3e241965-fee3-400e-9652-07cfbf0c0bda/download/deaths-leading-causes.csv",
+    skip = 2,
+    col_types = cols(
+      `Calendar Year` = col_integer(),
+      Cause = col_character(),
+      Ranking = col_integer(),
+      `Total Deaths` = col_integer()
+    )
+  ) |>
+  clean_names() |>
+  add_count(cause) |>
+  mutate(cause = str_trunc(cause, 30))
+```
+
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| lable: "tbl-topcauses-3"
+#| tbl-cap: Top-ten causes of death in Alberta in 2022
+
+alberta_cod |>
+  filter(
+    calendar_year == 2022,
+    ranking <= 10
+  ) |>
+  mutate(total_deaths = format(total_deaths, big.mark = ",")) |>
+  kable(
+    col.names = c("Year", "Cause", "Ranking", "Deaths", "Years"),
+    align = c("l", "r", "r", "r", "r"),
+    digits = 0, booktabs = TRUE, linesep = ""
+  )
+```
+
+We then created line graphs of the top five causes of death in 2022, showing how they performed from 2001 to 2022 (@fig-topcauses-4).
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| lable: "fig-topcauses-4"
+#| fig-cap: Annual number of deaths for the top-five causes in 2022, since 2001, for Alberta, Canada
+
+top_causes <- alberta_cod %>%
+  filter(calendar_year == 2022) %>%
+  top_n(5, total_deaths) %>%
+  pull(cause)
+
+alberta_cod_filtered <- alberta_cod %>%
+  filter(cause %in% top_causes)
+
+# Create a faceted line graph for the top causes with the same y-axis range
+ggplot(alberta_cod_filtered, aes(x = calendar_year, y = total_deaths, group = cause, color = cause)) +
+  geom_line() +
+  facet_wrap(~cause, scales = "fixed", ncol = 1) +  # Fixed scales for y-axis
+  scale_color_brewer(palette = "Set1") +
+  theme_minimal() +
+  labs(x = "Year", y = "Annual number of deaths in Alberta") +
+  theme(legend.position = "none", 
+        strip.text.x = element_text(size = 12))
+```
+
+For creating the Poisson and Negative Binomial models, We can introduce some math functions. The Poisson regression model is expressed mathematically as 
+$$
+\log(\lambda_i) = \beta_0 + \beta_1X_{1i} + \ldots + \beta_pX_{pi}
+$$
+where $\lambda_i$ is the expected number of deaths (the mean of the Poisson distribution) for the i-th observation, $X_{1i}$, ... , $X_{pi}$ are the explanatory variables (e.g., cause of death), and $\beta_0$, $\beta_1$, ... , $\beta_p$ are the coefficients to be estimated.
+
+The Negative Binomial regression model is expressed mathematically as: 
+$$
+\log(\mu_i) = \beta_0 + \beta_1X_{1i} + \ldots + \beta_pX_{pi}
+$$
+And the variance is given by: 
+$$
+Var(Y_i) = \mu_i + \alpha\mu_i^2
+$$
+where $\mu_i$ is the mean count for the i-th observation, and $\alpha$ is the overdispersion parameter. The variance is no longer assumed to be equal to the mean but grows with the mean, adjusted by $\alpha$.
+
+
+## Model justification
+
+In choosing between the Poisson and Negative Binomial models for analyzing mortality data, we consider the nature of our data. The Poisson model is straightforward and assumes that the average number of deaths is the same across all groups we study. It's a good basic model if our data are simple and don't vary too much. However, real-world data often don't follow these simple patterns. For example, the number of deaths from one cause might be more unpredictable than from another, leading to "overdispersion".
+
+This is where the Negative Binomial model works better. It adds an extra feature to handle overdispersion, which makes it more flexible and usually a better fit for real-life data like ours. While it's a bit more complex to use, this model gives us more reliable results when our data show a lot of variability. 
+
+In short, if our mortality data are pretty consistent and don't vary much, the Poisson model could work well. But if we find that the number of deaths fluctuates a lot or is unpredictable, the Negative Binomial model is likely the better choice for accurate analysis.
+
+
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| results: hide
+
+cause_of_death_alberta_poisson <- stan_glm(
+  total_deaths ~ cause,
+  data = alberta_cod_filtered,
+  family = poisson(link = "log"),
+  seed = 853
+)
+
+cause_of_death_alberta_neg_binomial <- stan_glm(
+  total_deaths ~ cause,
+  data = alberta_cod_filtered,
+  family = neg_binomial_2(link = "log"),
+  seed = 853
+)
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| lable: tbl-result
+#| tbl-cap: Modeling the most prevalent cause of deaths in Alberta, 2001-2022
+
+model_results <- modelsummary(
+  list(
+    "Poisson" = cause_of_death_alberta_poisson,
+    "Negative binomial" = cause_of_death_alberta_neg_binomial
+  )
+)
+
+model_results
+```
+
+
+# Results {#sec-results}
+
+Our results are summarized in @tbl-result
+
+To analyze the Poisson and Negative Binomial models, we imply the function $\log(E(y)) = \beta_0 + \beta_1X_{1i} + \ldots + \beta_pX_{pi}$. The coefficients represent the $\beta_p$ values in the equation, and the $X_{pi}$ variables are the different causes of death you've included in the model.
+
+## Poisson Model 
+
+In the Poisson regression, the coefficients can be interpreted as the log change in the expected count of deaths for a one-unit increase in the predictor variable, holding other variables constant. For instance:
+
+The intercept (7.484) indicates the log of expected deaths when all predictor variables are zero. Since this isn't meaningful for categorical variables like cause of death, it's better understood as the log of expected deaths for the reference category.
+
+The coefficient for "COVID-19, virus identified" (-0.153) suggests that, when comparing to the reference category (likely "no cause" or an omitted baseline cause), the expected log count of deaths decreases by 0.153, implying fewer deaths attributed to COVID-19 relative to the baseline.
+
+To interpret these effects on the original count scale, we exponentiate the coefficients:
+For COVID-19, $e^(-0.153)≈0.86$, meaning the expected count of deaths is multiplied by about 0.86 for COVID-19 relative to the reference category, indicating a decrease.
+
+## Negative Binomial Model
+
+The Negative Binomial model accounts for overdispersion and has similar interpretation for the coefficients. However, it provides a potentially better fit if the variance of the death counts is significantly greater than the mean.
+
+The coefficients in the Negative Binomial model are nearly identical to those in the Poisson model, which indicates that both models provide a consistent interpretation of how the causes of death relate to mortality rates.
+
+## LOO
+
+The Negative Binomial model demonstrated a better fit over the Poisson model as indicated by the Leave-One-Out (LOO) Cross-Validation results. In this case, we find that the Negative Binomial model is a better fit than the Poisson because ELPD is larger.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+poisson <- loo(cause_of_death_alberta_poisson, cores = 2)
+neg_binomial <- loo(cause_of_death_alberta_neg_binomial, cores = 2)
+
+loo_compare(poisson, neg_binomial)
+```
+
+
+
+# Discussion {#sec-discussion}
+
+## Things we have done in this paper
+
+In this paper, we analyzed Alberta's mortality data to see which statistical model, Poisson or Negative Binomial (NB), fits best. Our analysis started with the Poisson model, which is straightforward but assumes that the average number of deaths is the same as the variability in those numbers. However, our data showed more variability than the Poisson model could handle, a condition known as overdispersion.
+
+This led us to the NB model, which is designed to deal with overdispersion by adding an extra parameter. Through visual checks and Leave-One-Out Cross-Validation (LOO), we found that the NB model provided a better fit for our data, capturing the true variability in mortality rates more accurately than the Poisson model.
+
+Ultimately, our work demonstrates that the NB model is more suitable for analyzing mortality data, offering clearer insights into the causes of death in Alberta. This finding is crucial for public health planning and interventions. 
+
+## Something that we learn about the world
+
+One of the findings of our study is that mortality rates increased substantially after 2019, largely due to the Covid-19 epidemic. Based on our analysis of the post-2019 data, the emergence of COVID-19 had a clear impact on mortality. Worldwide epidemics have a corresponding impact on local mortality rates. The dramatic increase in mortality following a pandemic highlights the profound impact of infectious diseases on global health systems and society as a whole.
+
+Because pandemics like Covid-19 typically emerge suddenly, general models have difficulty predicting such diseases. Therefore, we need more accurate models to simulate and predict the data.
+
+These data reflect the importance of a rapid public health response to emerging infectious disease threats. The ability to rapidly identify, contain and slow the spread of such diseases can significantly alter their impact on mortality. This highlights the need for establishing adequate monitoring systems and global information sharing, as well as early detection of disease outbreaks.
+
+## Another thing that we learn about the world
+
+Using Leave-One-Out Cross-Validation, we found that the Negative Binomial model is a better fit for our data on causes of death in Alberta than the Poisson model. This suggests that the NB model, which accounts for overdispersion is more aligned with the real-world complexity and variability observed in mortality data.
+
+Through this study, we learn that statistical modeling, when carefully applied, can offer profound insights into real-world phenomena, such as mortality patterns. The ability of the NB model to better capture the variability in the data underscores the importance of choosing appropriate models. This not only enhances our understanding of mortality but also points to the broader lesson that in the face of complex data, models that offer flexibility and can accommodate extra variability are crucial for deriving accurate and meaningful insights. This approach can be extended beyond mortality data to various fields where understanding patterns and making predictions are vital, illustrating the universal value of statistical modeling in deciphering the complexities of the world around us.
+
+## Weaknesses
+
+Our study, looking at death trends in Alberta and how COVID-19 affected these, has been informative. But, like all research, it has its limits.
+
+First off, we're working with past data that others collected. This means we might not have all the details we wish we had, like the exact reasons behind each death. Sometimes, how deaths are recorded can mix up different health issues, which might confuse our results.
+
+We mainly used two types of math models to understand the data. These models are great tools, but they're not perfect. They work under certain rules that might not fit every situation perfectly. For instance, we chose one model over another because it handled the data's ups and downs better. Yet, there could be other reasons for these ups and downs that we didn't get into.
+
+Also, our study didn't dive deep into how people's living situations, access to healthcare, or personal habits might influence these death trends. These are big factors, but they need more complex studies to really understand.
+
+Lastly, what we found out about Alberta might not be true for other places. Every area has its own health challenges and ways of handling them. Plus, the big impact we saw from COVID-19 is just one part of the bigger picture of health over the years.
+
+So, while we learned a lot, there's still much more to explore. Future studies could look into these other factors and use different methods to get a fuller picture of what's going on.
+
+## Next steps
+
+After looking at death trends in Alberta, here's how we can learn more and better tackle health issues:
+
+1. Get More Information: We need to look at more things like people's living situations, if they can get to a doctor easily, and their lifestyle choices. This will help us understand why some health problems happen more often.
+
+2. Try New Ways of Studying Data: We could use newer, smarter methods to study the information. This might help us see patterns and connections we missed before.
+
+3. Look Closer at Certain Groups: It's important to study different groups of people or areas in more detail. This can show us who might need more help with their health.
+
+4. Study Over Time: Following the same people or groups over years can tell us how health problems change and why.
+
+5. Check If Health Actions Work: We should see if the steps we take to stop diseases, like COVID-19, really work. This means looking at how well vaccines or health advice work.
+
+6. Compare Different Places: Seeing how different areas deal with health problems can teach us what works best.
+
+
+\newpage
+
+\appendix
+
+# Appendix {#sec-appendix}
+
+## Model details {#sec-model-details}
+
+### Posterior predictive check
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| lable: fig-ppcheckp
+#| fig-cap: Posterior prediction checks for poisson model
+
+pp_check(cause_of_death_alberta_poisson) +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| lable: fig-ppchecknb
+#| fig-cap: Posterior prediction checks for negative binomial model
+
+pp_check(cause_of_death_alberta_neg_binomial) +
+  theme(legend.position = "bottom")
+```
+In @fig-ppcheckp-1, we implement a posterior predictive check for the Poisson model, which reveals noticeable discrepancies between the observed mortality counts and those predicted by the model. This suggests the presence of overdispersion in the data, indicating that the Poisson model may not adequately capture the variability in mortality rates across different causes of death in Alberta.
+
+In @fig-ppchecknb-2, we conduct a posterior predictive check for the Negative Binomial model, displaying a significantly better alignment between the observed data and the model's predictions. This improved fit highlights the Negative Binomial model's ability to account for overdispersion, making it a more accurate and reliable choice for analyzing Alberta's mortality data.
+
+# References
+
+
